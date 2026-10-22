@@ -196,20 +196,31 @@ export async function initializeSheet(): Promise<void> {
   const a = all.properties.sheetId;
   const s = search.properties.sheetId;
 
+  // SEARCH may contain hand-maintained formulas or a different reporting layout.
+  // Never clear an existing report just to re-apply ALL formatting.
+  const searchValues = await sheetsFetch<{ values?: unknown[][] }>(
+    `/values/${encodeURIComponent(`${SEARCH_TAB}!A1:Z${MAX_ROWS}`)}`,
+  );
+  const preserveSearch = (searchValues.values ?? []).some((row) =>
+    row.some((value) => String(value ?? "").trim() !== ""),
+  );
+
   /* 2. Reset old banding / conditional formats so re-running never fails */
   const resetRequests: unknown[] = [];
-  for (const sheet of [all, search]) {
+  for (const sheet of preserveSearch ? [all] : [all, search]) {
     for (const b of sheet.bandedRanges ?? []) resetRequests.push({ deleteBanding: { bandedRangeId: b.bandedRangeId } });
     const count = sheet.conditionalFormats?.length ?? 0;
     for (let i = 0; i < count; i++) {
       resetRequests.push({ deleteConditionalFormatRule: { sheetId: sheet.properties.sheetId, index: 0 } });
     }
   }
-  resetRequests.push({ unmergeCells: { range: range(s, 0, 3, 0, 30) } });
+  if (!preserveSearch) resetRequests.push({ unmergeCells: { range: range(s, 0, 3, 0, 30) } });
   await batchUpdate(resetRequests);
 
-  /* 3. Clear the SEARCH tab and write headers into ALL */
-  await sheetsFetch(`/values/${encodeURIComponent(`${SEARCH_TAB}!A1:Z${MAX_ROWS}`)}:clear`, { method: "POST", body: "{}" });
+  /* 3. Clear only a blank SEARCH tab and write headers into ALL */
+  if (!preserveSearch) {
+    await sheetsFetch(`/values/${encodeURIComponent(`${SEARCH_TAB}!A1:Z${MAX_ROWS}`)}:clear`, { method: "POST", body: "{}" });
+  }
   await sheetsFetch(`/values/${encodeURIComponent(`${ALL_TAB}!A1:Z1`)}?valueInputOption=RAW`, {
     method: "PUT",
     body: JSON.stringify({ values: [[...SHEET_HEADERS]] }),
@@ -307,7 +318,7 @@ export async function initializeSheet(): Promise<void> {
   ];
 
   /* 5. Formatting – SEARCH tab */
-  const searchRequests: unknown[] = [
+  const searchRequests: unknown[] = preserveSearch ? [] : [
     {
       updateSheetProperties: {
         properties: { sheetId: s, tabColor: C.buyer, gridProperties: { frozenRowCount: 1 } },
@@ -388,16 +399,18 @@ export async function initializeSheet(): Promise<void> {
   await batchUpdate([...allRequests, ...searchRequests]);
 
   /* 6. Live SEARCH formulas (need USER_ENTERED so Sheets evaluates them) */
-  await sheetsFetch("/values:batchUpdate", {
-    method: "POST",
-    body: JSON.stringify({
-      valueInputOption: "USER_ENTERED",
-      data: [
-        { range: `${SEARCH_TAB}!A1`, values: [["BUYER"]] },
-        { range: `${SEARCH_TAB}!M1`, values: [["SELLER"]] },
-        { range: `${SEARCH_TAB}!A3`, values: [[blockFormula("Buyer")]] },
-        { range: `${SEARCH_TAB}!M3`, values: [[blockFormula("Seller")]] },
-      ],
-    }),
-  });
+  if (!preserveSearch) {
+    await sheetsFetch("/values:batchUpdate", {
+      method: "POST",
+      body: JSON.stringify({
+        valueInputOption: "USER_ENTERED",
+        data: [
+          { range: `${SEARCH_TAB}!A1`, values: [["BUYER"]] },
+          { range: `${SEARCH_TAB}!M1`, values: [["SELLER"]] },
+          { range: `${SEARCH_TAB}!A3`, values: [[blockFormula("Buyer")]] },
+          { range: `${SEARCH_TAB}!M3`, values: [[blockFormula("Seller")]] },
+        ],
+      }),
+    });
+  }
 }
