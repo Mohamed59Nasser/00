@@ -3,14 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="صفحة مؤقتة إلى أن يتم رفع الموقع." />
-    <title>المستودع جاهز لاستقبال الموقع</title>
+    <meta
+      name="description"
+      content="Broker Data Sheet لإدارة بيانات عملاء الوساطة العقارية."
+    />
+    <title>Broker Data Sheet</title>
     <style>
       :root {
-        color-scheme: dark;
-        font-family: Tahoma, Arial, sans-serif;
-        background: #0f172a;
-        color: #e2e8f0;
+        color-scheme: light;
+        font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+        color: #0f172a;
+        background: #f1f5f9;
+      }
+
+      * {
+        box-sizing: border-box;
       }
 
       body {
@@ -19,44 +26,139 @@
         display: grid;
         place-items: center;
         padding: 24px;
-        box-sizing: border-box;
       }
 
       main {
-        width: min(100%, 640px);
-        padding: 40px;
-        box-sizing: border-box;
-        text-align: center;
-        border: 1px solid #334155;
+        width: min(100%, 760px);
+        padding: clamp(24px, 6vw, 48px);
+        border: 1px solid #cbd5e1;
         border-radius: 20px;
-        background: #1e293b;
+        background: #fff;
+        box-shadow: 0 20px 50px rgb(15 23 42 / 0.08);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 28px;
+      }
+
+      .icon {
+        display: grid;
+        width: 48px;
+        height: 48px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 14px;
+        color: #fff;
+        background: #059669;
       }
 
       h1 {
-        margin-top: 0;
-        color: #f8fafc;
+        margin: 0;
+        font-size: clamp(1.5rem, 4vw, 2rem);
       }
 
-      p {
-        margin-bottom: 0;
-        line-height: 1.9;
-        color: #cbd5e1;
+      .subtitle {
+        margin: 4px 0 0;
+        color: #64748b;
       }
 
-      code {
-        direction: ltr;
-        display: inline-block;
-        color: #7dd3fc;
+      .notice {
+        padding: 18px 20px;
+        border: 1px solid #fcd34d;
+        border-radius: 12px;
+        color: #78350f;
+        background: #fffbeb;
+        line-height: 1.8;
+      }
+
+      .notice strong {
+        display: block;
+        margin-bottom: 4px;
+        color: #92400e;
+      }
+
+      ul {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 10px 24px;
+        margin: 24px 0;
+        padding-inline-start: 20px;
+        color: #475569;
+      }
+
+      a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 18px;
+        border-radius: 8px;
+        color: #fff;
+        background: #047857;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      a:hover {
+        background: #065f46;
+      }
+
+      @media (max-width: 480px) {
+        body {
+          padding: 14px;
+        }
+
+        main {
+          padding: 22px;
+        }
       }
     </style>
   </head>
   <body>
     <main>
-      <h1>المستودع جاهز لاستقبال موقعك</h1>
-      <p>
-        هذه صفحة مؤقتة. عند رفع الموقع، استبدل هذا الملف بملف
-        <code>index.html</code> الخاص بموقعك مع باقي الملفات والصور.
-      </p>
+      <div class="brand">
+        <span class="icon" aria-hidden="true">
+          <svg
+            width="26"
+            height="26"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 21h18M5 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M9 8h2M9 12h2M9 16h2M15 9h3a1 1 0 0 1 1 1v11" />
+          </svg>
+        </span>
+        <div>
+          <h1>Broker Data Sheet</h1>
+          <p class="subtitle">إدارة بيانات عملاء الوساطة العقارية</p>
+        </div>
+      </div>
+
+      <section class="notice" aria-labelledby="notice-title">
+        <strong id="notice-title">التطبيق الكامل يحتاج إلى خادم</strong>
+        <span>
+          هذا المشروع مبني بـ Next.js ويعتمد على واجهات API وقاعدة PostgreSQL أو
+          Google Sheets. GitHub Pages يستضيف الملفات الثابتة فقط، لذلك لا يمكنه
+          تشغيل لوحة إدارة العملاء أو حفظ البيانات. لم يتم إعداد رابط Google Sheet
+          أو إضافة أي بيانات تجريبية.
+        </span>
+      </section>
+
+      <ul>
+        <li>إدارة بيانات المشترين والبائعين</li>
+        <li>البحث والتصفية حسب العقار والمنطقة</li>
+        <li>التصدير إلى Excel</li>
+        <li>ربط Google Sheets اختياريًا من الخادم</li>
+      </ul>
+
+      <a href="https://github.com/Mohamed59Nasser/00">
+        عرض مصدر التطبيق وتعليمات تشغيله
+      </a>
     </main>
   </body>
 </html>

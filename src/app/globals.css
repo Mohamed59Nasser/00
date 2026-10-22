@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+body {
+  min-height: 100vh;
+}
+
+/* Subtle, consistent scrollbars for the sheet areas */
+.sheet-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.sheet-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.sheet-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  border: 2px solid #f1f5f9;
+}
+.sheet-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/*
+ * Component classes live in the `components` layer so that plain Tailwind
+ * utilities (w-64, pl-8, text-right, …) can still override them.
+ */
+@layer components {
+  /* ---------- Form controls ---------- */
+  .field-label {
+    @apply mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500;
+  }
+  .field-input,
+  .field-select {
+    @apply block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 disabled:bg-slate-50 disabled:text-slate-400;
+  }
+  .field-select {
+    @apply appearance-none bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.6rem center;
+    background-size: 1.1rem;
+  }
+
+  /* ---------- Buttons ---------- */
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-primary {
+    @apply bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 focus-visible:ring-emerald-500;
+  }
+  .btn-secondary {
+    @apply border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:ring-slate-400;
+  }
+  .btn-danger {
+    @apply bg-rose-600 text-white shadow-sm hover:bg-rose-700 focus-visible:ring-rose-500;
+  }
+  .btn-ghost {
+    @apply rounded-md px-2 py-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  /* ---------- Spreadsheet grid ---------- */
+  .sheet-table {
+    @apply w-full border-separate border-spacing-0 text-sm;
+  }
+  .sheet-table thead th {
+    @apply sticky top-0 z-10 border-b border-r border-slate-700 bg-slate-800 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap text-slate-100;
+  }
+  .sheet-table thead th:first-child {
+    @apply bg-slate-900 text-center;
+  }
+  .sheet-table tbody td {
+    @apply border-b border-r border-slate-200 px-3 py-2 align-middle whitespace-nowrap text-slate-800;
+  }
+  .sheet-table tbody td:first-child {
+    @apply bg-slate-50 text-center text-[11px] font-medium text-slate-400;
+  }
+  .sheet-table tbody tr:nth-child(even) td:not(:first-child) {
+    background-color: rgb(248 250 252 / 0.7);
+  }
+  .sheet-table tbody tr:hover td:not(:first-child) {
+    background-color: rgb(236 253 245 / 0.8);
+  }
+  .sheet-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .sheet-table th:last-child,
+  .sheet-table td:last-child {
+    @apply border-r-0;
+  }
+}
