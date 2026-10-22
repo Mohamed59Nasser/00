@@ -5,12 +5,15 @@ import { apiError, readJson } from "@/lib/api";
 import { AccessError } from "@/lib/access";
 import { assertSameOrigin, requireApiUser } from "@/lib/auth";
 import { getSheetsConfig, sheetsFetch } from "@/lib/google";
+import { findDuplicateInData } from "@/lib/duplicates";
 import { initializeSheet } from "@/lib/sheetsSetup";
 import { errorMessage, getStorageSummary } from "@/lib/store";
 import { postgresStore, rowToClient } from "@/lib/store/postgres";
 import { ALL_TAB, SEARCH_TAB, appendClients, resetSheetsReadyCache, sheetsStore } from "@/lib/store/sheets";
 import { syncUsersToSheet } from "@/lib/usersSheets";
+import { listAllPublicUsers } from "@/lib/users";
 import type { SessionUser } from "@/lib/staff";
+import type { Client } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -75,11 +78,21 @@ export async function POST(request: Request) {
 
     if (body.action === "migrate") {
       const rows = await db.select().from(clients).orderBy(clients.createdAt);
-      if (rows.length === 0) return Response.json({ ok: true, message: "No local records to copy.", copied: 0 });
-      const existing = new Set((await sheetsStore.list()).map((c) => c.id));
-      const toCopy = rows.map(rowToClient).filter((c) => !existing.has(c.id));
+      if (rows.length === 0) return Response.json({ ok: true, message: "No local records to copy.", copied: 0, skipped: 0 });
+      const existingClients = await sheetsStore.list();
+      const existingIds = new Set(existingClients.map((c) => c.id));
+      const users = await listAllPublicUsers();
+      const toCopy: Client[] = [];
+      let skipped = 0;
+      for (const client of rows.map(rowToClient)) {
+        if (existingIds.has(client.id) || findDuplicateInData([...existingClients, ...toCopy], users, client.phone, client.email)) {
+          skipped += 1;
+          continue;
+        }
+        toCopy.push(client);
+      }
       const copied = await appendClients(toCopy);
-      return Response.json({ ok: true, copied, message: `${copied} record(s) copied to Google Sheets.` });
+      return Response.json({ ok: true, copied, skipped, message: `${copied} record(s) copied; ${skipped} skipped as existing or duplicate contact.` });
     }
 
     return Response.json({ error: "Unknown action." }, { status: 400 });

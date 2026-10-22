@@ -39,6 +39,16 @@ async function ensureUsersTab(): Promise<void> {
 export async function syncUsersToSheet(): Promise<void> {
   await ensureUsersTab();
   const users = await listAllPublicUsers();
+  if (users.length === 0) {
+    // Never erase pre-existing Sheet staff metadata before the first DB bootstrap.
+    const existing = await sheetsFetch<{ values?: unknown[][] }>(`/values/${encodeURIComponent(`${USERS_TAB}!A1:N`)}`);
+    if ((existing.values ?? []).length > 1) return;
+    await sheetsFetch(`/values/${encodeURIComponent(`${USERS_TAB}!A1:N1`)}?valueInputOption=RAW`, {
+      method: "PUT",
+      body: JSON.stringify({ values: [[...USERS_HEADERS]] }),
+    });
+    return;
+  }
   const names = new Map(users.map((user) => [user.id, user.displayName]));
   const rows = users.map((user) => [
     user.id,
