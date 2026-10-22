@@ -183,6 +183,7 @@ export function ClientForm({ initial, onSubmit, submitLabel = "Add to Sheet", on
 
     if (!values.name.trim()) return setError("Name is required.");
     if (!values.phone.trim()) return setError("Phone is required.");
+    if (values.phone.replace(/\D/g, "").length < 5) return setError("Phone must contain at least 5 digits.");
     if (values.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
       return setError("Email format is not valid.");
     }

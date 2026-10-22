@@ -64,8 +64,10 @@ export function validateClientInput(body: unknown): ValidationResult {
   const phone = cleanString(b.phone);
   if (!phone) return { ok: false, error: "Phone is required." };
   if (phone.length > 40) return { ok: false, error: "Phone is too long." };
+  if (phone.replace(/\D/g, "").length < 5) return { ok: false, error: "Phone must contain at least 5 digits." };
 
   const email = cleanString(b.email);
+  if (email && email.length > 254) return { ok: false, error: "Email is too long." };
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { ok: false, error: "Email format is not valid." };
   }

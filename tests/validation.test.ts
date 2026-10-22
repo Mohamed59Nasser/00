@@ -32,6 +32,7 @@ describe("client input validation", () => {
 
   it("requires phone and a valid email when supplied", () => {
     expect(validateClientInput({ ...valid, phone: "" }).ok).toBe(false);
+    expect(validateClientInput({ ...valid, phone: "not-a-phone" }).ok).toBe(false);
     expect(validateClientInput({ ...valid, email: "not-an-email" }).ok).toBe(false);
     expect(validateClientInput({ ...valid, email: "" }).ok).toBe(true);
   });
