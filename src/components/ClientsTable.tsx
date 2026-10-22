@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import type { Client } from "@/lib/types";
+import type { PublicUser } from "@/lib/staff";
 import { formatDate, formatPrice, formatSize } from "@/lib/types";
 import { PencilIcon, SortIcon, TrashIcon } from "./icons";
 import { AreaChips, EmptyState, MaritalBadge, PaymentBadges, RoleBadge, TypeBadges } from "./ui";
@@ -141,6 +142,10 @@ interface ClientsTableProps {
   variant?: "full" | "compact";
   onEdit: (client: Client) => void;
   onDelete: (client: Client) => void;
+  canDelete?: boolean;
+  canTransfer?: boolean;
+  assignableUsers?: PublicUser[];
+  onTransfer?: (id: string, assignedToId: string) => Promise<void>;
   emptyTitle?: string;
   emptyHint?: string;
   maxHeightClass?: string;
@@ -151,12 +156,56 @@ export function ClientsTable({
   variant = "full",
   onEdit,
   onDelete,
+  canDelete = false,
+  canTransfer = false,
+  assignableUsers = [],
+  onTransfer,
   emptyTitle = "No records yet",
   emptyHint,
   maxHeightClass = "max-h-[70vh]",
 }: ClientsTableProps) {
-  const columns = useMemo(() => buildColumns(variant), [variant]);
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
+  const [transferBusy, setTransferBusy] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const columns = useMemo(() => {
+    const base = buildColumns(variant);
+    const owner: Column = {
+      key: "assignedTo",
+      label: "Assigned To",
+      sortValue: (client) => lower(client.assignedToName),
+      render: (client) => {
+        if (!canTransfer || !onTransfer) return <span className="text-xs font-medium text-slate-600">{client.assignedToName ?? "Unassigned"}</span>;
+        const hasCurrent = assignableUsers.some((user) => user.id === client.assignedToId);
+        return (
+          <select
+            className="field-select min-w-36 py-1 text-xs"
+            value={client.assignedToId ?? ""}
+            disabled={transferBusy === client.id}
+            aria-label={`Transfer ${client.name}`}
+            onChange={async (event) => {
+              const assignedToId = event.target.value;
+              if (!assignedToId || assignedToId === client.assignedToId) return;
+              setTransferBusy(client.id);
+              setActionError(null);
+              try {
+                await onTransfer(client.id, assignedToId);
+              } catch (error) {
+                setActionError(error instanceof Error ? error.message : "Failed to transfer client.");
+              } finally {
+                setTransferBusy(null);
+              }
+            }}
+          >
+            {!client.assignedToId && <option value="" disabled>Unassigned</option>}
+            {!hasCurrent && client.assignedToId && <option value={client.assignedToId} disabled>{client.assignedToName ?? "Current user"}</option>}
+            {assignableUsers.map((user) => <option key={user.id} value={user.id}>{user.displayName}</option>)}
+          </select>
+        );
+      },
+    };
+    return [base[0], owner, ...base.slice(1)];
+  }, [variant, canTransfer, onTransfer, assignableUsers, transferBusy]);
 
   const sorted = useMemo(() => {
     if (!sort) return clients;
@@ -186,8 +235,10 @@ export function ClientsTable({
   const alignClass = (a?: Column["align"]) => (a === "right" ? "text-right" : a === "center" ? "text-center" : "text-left");
 
   return (
-    <div className={`sheet-scroll overflow-auto ${maxHeightClass}`}>
-      <table className="sheet-table">
+    <div>
+      {actionError && <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{actionError}</div>}
+      <div className={`sheet-scroll overflow-auto ${maxHeightClass}`}>
+        <table className="sheet-table">
         <thead>
           <tr>
             <th className="w-12">#</th>
@@ -228,15 +279,18 @@ export function ClientsTable({
                   <button type="button" className="btn-ghost" onClick={() => onEdit(client)} title="Edit" aria-label={`Edit ${client.name}`}>
                     <PencilIcon size={16} />
                   </button>
-                  <button type="button" className="btn-ghost hover:bg-rose-50 hover:text-rose-600" onClick={() => onDelete(client)} title="Delete" aria-label={`Delete ${client.name}`}>
-                    <TrashIcon size={16} />
-                  </button>
+                  {canDelete && (
+                    <button type="button" className="btn-ghost hover:bg-rose-50 hover:text-rose-600" onClick={() => onDelete(client)} title="Delete" aria-label={`Delete ${client.name}`}>
+                      <TrashIcon size={16} />
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
     </div>
   );
 }

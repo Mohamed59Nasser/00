@@ -1,5 +1,7 @@
 import ExcelJS from "exceljs";
-import { errorMessage, getStore } from "@/lib/store";
+import { apiError } from "@/lib/api";
+import { requireApiUser } from "@/lib/auth";
+import { listVisibleClients } from "@/lib/clients";
 import {
   CLIENT_ROLE_LABELS,
   MARITAL_LABELS,
@@ -322,7 +324,8 @@ function buildSearchSheet(wb: ExcelJS.Workbook, rows: Client[]) {
 /* ------------------------------------------------------------------ */
 export async function GET() {
   try {
-    const rows = await getStore().list();
+    const actor = await requireApiUser();
+    const rows = await listVisibleClients(actor);
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Broker Sheet";
@@ -344,7 +347,6 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("GET /api/export failed", error);
-    return Response.json({ error: errorMessage(error, "Failed to export workbook.") }, { status: 500 });
+    return apiError(error, "Failed to export workbook.");
   }
 }

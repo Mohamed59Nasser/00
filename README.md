@@ -1,23 +1,79 @@
 # Broker Data Sheet
 
-تطبيق لإدارة بيانات عملاء الوساطة العقارية، مبني باستخدام Next.js 16 وReact 19 وTypeScript وTailwind CSS 4. يدعم واجهة API خادمية، وتخزين PostgreSQL أو Google Sheets، وتصدير Excel.
+تطبيق Next.js 16 + React 19 + TypeScript لإدارة عملاء الوساطة العقارية، مع تسجيل دخول وصلاحيات على الخادم، وتخزين العملاء في Google Sheet أو PostgreSQL محليًا، وتصدير Excel.
 
-## التشغيل
+## الشيت الحالي
 
-- يتطلب Node.js 20 أو أحدث، وقاعدة PostgreSQL متاحة عبر `DATABASE_URL`.
-- انسخ قيم الإعدادات إلى ملف `.env.local` محليًا، ولا ترفع الملف إلى Git.
-- إعدادات Google Sheets اختيارية: `GOOGLE_SHEET_ID` و`GOOGLE_SERVICE_ACCOUNT_EMAIL` و`GOOGLE_PRIVATE_KEY`، أو `GOOGLE_SERVICE_ACCOUNT_JSON`.
-- ثبّت الاعتماديات باستخدام `npm ci`، ثم شغّل `npm run dev`.
-- تحقق من الأنواع والبناء عبر `npm run typecheck` و`npm run build`.
+**Real Estate Data:** https://docs.google.com/spreadsheets/d/14u23WYNh2OTwBk-5AgNj5nOSGpDUMhSIE_aOzgF7-do/edit?usp=drivesdk
 
-يستخدم التطبيق Google Sheets كمخزن أساسي عند ضبط إعداداتها، وإلا يستخدم PostgreSQL. بيانات الحساب الخاص ومفاتيح Google يجب أن تبقى في متغيرات البيئة الخادمية فقط.
+يجب الحفاظ على هذا الملف وعلى تبويباته الثلاثة في نفس الملف:
 
-## النشر
+- `ALL`: بيانات العملاء، 26 عمودًا، وتشمل المالك الحالي `Assigned To` وحقول الإنشاء والتعديل والإسناد.
+- `SEARCH`: نتائج مشتقة بصيغ من `ALL`.
+- `USERS`: بيانات الموظفين غير السرية فقط، ولا يحتوي على كلمة مرور أو hash أو مفتاح خاص أو جلسة.
 
-مسار التطبيق مضبوط على `/00` ليتوافق مع اسم مستودع GitHub Pages. لكن GitHub Pages يستضيف ملفات ثابتة فقط، ولا يشغّل Next.js أو واجهات `/api/*` أو اتصالات PostgreSQL وحساب Google الخادمي. لذلك لا يمكن تشغيل هذا التطبيق كاملًا على GitHub Pages مع الحفاظ على وظائفه.
+الـ migration الموجود في `db/migrations/001_rbac.sql` إضافي ولا يحذف سجلات العملاء الموجودة.
 
-لنشر التطبيق كاملًا، استخدم خدمة تستضيف تطبيقات Next.js الخادمية، واضبط متغيرات البيئة وقاعدة البيانات هناك. يجب أن يدعم المضيف مسار التطبيق `/00` أو يُزال `basePath` عند النشر على نطاق جذري. صفحة GitHub Pages التعريفية لا تستبدل التطبيق الخادمي.
+## الصلاحيات
 
-## حقول Google Sheets
+| الدور | النطاق |
+| --- | --- |
+| Agent | إضافة عميل لنفسه، وتعديل عملائه المعينين له فقط؛ لا حذف ولا نقل ولا إدارة موظفين. |
+| Senior / Team Leader | نفس الصلاحيات داخل فريقه: إضافة Agents، إدارة عملاء الفريق، ونقلهم داخل الفريق فقط. |
+| Admin | كل الفرق والأدوار، النقل، وإدارة الموظفين، وهو الوحيد الذي يستطيع حذف بيانات العملاء. |
 
-ينشئ التطبيق تبويبي `ALL` و`SEARCH`. أعمدة `ALL` بالترتيب: الاسم، الهاتف، البريد الإلكتروني، العمر، الحالة الاجتماعية، عدد الأطفال، ملاحظات الأطفال، المناطق، المساحة بالمتر المربع، السعر بالجنيه، نوع العقار، دور العميل (مشتري/بائع)، طريقة الدفع، الملاحظات، تاريخ الإضافة، ومعرّف داخلي. تبويب `SEARCH` مشتق بصيغ من بيانات `ALL`.
+كل عمليات القراءة والتعديل والحذف والنقل وفحص التكرار محمية في API على الخادم، وليست مجرد إخفاء أزرار في الواجهة. فحص التكرار يتم على الهاتف **أو** البريد الإلكتروني في كل العملاء، ويُظهر معلومات ملكية محدودة مع إخفاء بيانات الاتصال.
+
+## التشغيل المحلي
+
+1. ثبّت Node.js 20 أو أحدث، ثم نفّذ `npm ci`.
+2. انسخ `.env.example` إلى `.env.local` واملأ القيم. لا ترفع `.env.local` إلى Git.
+3. طبّق migration على PostgreSQL (مرة واحدة):
+
+   ```bash
+   psql "$DATABASE_URL" -f db/migrations/001_rbac.sql
+   ```
+
+   أو الصق محتواه في Supabase SQL Editor. تم تطبيقه بالفعل على مشروع Supabase الحالي.
+4. أنشئ حساب Admin الأول مرة واحدة. يطلب السكربت الباسورد من متغير مؤقت، ويحفظ bcrypt hash فقط؛ لا يطبع الباسورد ولا يكتبه في أي ملف:
+
+   ```bash
+   export DATABASE_URL='ضع رابط قاعدة البيانات هنا'
+   read -rsp 'Initial Admin password: ' ADMIN_INITIAL_PASSWORD; echo
+   export ADMIN_INITIAL_PASSWORD
+   npm run bootstrap:admin
+   unset ADMIN_INITIAL_PASSWORD
+   ```
+
+   بيانات الحساب الثابتة هي: الاسم `Mohamed Nasser`، الهاتف `01156426501`، والبريد `mohamednasser555999@gmail.com`. يجب أن يكون الباسورد من 10 إلى 128 حرفًا ويحتوي على حرف ورقم. أول تسجيل دخول يفرض تغييره. إعادة تشغيل السكربت بعد إنشاء الحساب لا تغيّر الباسورد.
+5. شغّل `npm run dev`.
+
+## ربط Google Sheets
+
+إنشاء حساب الخدمة خطوة يدوية من Google Cloud ولا يمكن للتطبيق إنشاؤه نيابة عنك:
+
+1. أنشئ مشروعًا أو استخدم مشروعًا مجانيًا في Google Cloud، وفعّل **Google Sheets API**.
+2. أنشئ **Service Account** ومفتاح JSON، ثم انسخ `client_email` فقط للمشاركة.
+3. شارك الشيت الحالي مع هذا البريد بصلاحية **Editor**. لا تنشئ Sheet جديدًا.
+4. ضع `GOOGLE_SHEET_ID` و`GOOGLE_SERVICE_ACCOUNT_EMAIL` و`GOOGLE_PRIVATE_KEY` في إعدادات الخادم، أو استخدم `GOOGLE_SERVICE_ACCOUNT_JSON` في مدير الأسرار. المفتاح الخاص سرّي ولا يوضع في Sheet أو GitHub أو المتصفح.
+
+بيانات الحساب والجلسات تبقى في PostgreSQL حتى عندما يكون العملاء في Google Sheets. عند غياب إعدادات Google يستخدم التطبيق PostgreSQL كمخزن محلي للعملاء.
+
+## النشر على Vercel مجانًا
+
+- اربط مستودع GitHub بمشروع Vercel وانشر branch المطلوب كتطبيق Next.js على المسار الجذري. اترك `NEXT_PUBLIC_BASE_PATH` فارغًا؛ ويمكن ضبطه على `/00` فقط إذا كان النشر يحتاج هذا البادئة.
+- أضف `DATABASE_URL` و`GOOGLE_SHEET_ID` و`GOOGLE_SERVICE_ACCOUNT_EMAIL` و`GOOGLE_PRIVATE_KEY` (أو JSON) كـ **Server Environment Variables**. لا تضف أي مفاتيح إلى متغيرات `NEXT_PUBLIC_*`.
+- نفّذ bootstrap من جهازك باستخدام `DATABASE_URL` الخاص بالإنتاج، ثم احذف متغير الباسورد المؤقت. لا حاجة لإضافة `ADMIN_INITIAL_PASSWORD` إلى Vercel.
+- تأكد من مشاركة الشيت مع بريد حساب الخدمة قبل اختبار الإضافة والتعديل.
+- خطة Vercel المجانية لا تضمن خادمًا دائم التشغيل، وتخضع Serverless Functions لحدود التنفيذ والطلبات. كذلك تخضع Google Sheets وSupabase لحصص وحدود الخطط المجانية، وقد تتوقف قاعدة Supabase المجانية مؤقتًا حسب سياسة عدم النشاط الحالية. لا يحتاج الحل إلى ترقية مدفوعة للعمل الأساسي.
+
+## التحقق
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+لا تضع أسرار الإنتاج في الأوامر التي قد تُحفظ في shell history، ولا في GitHub أو Google Sheets أو رسائل غير مشفرة.

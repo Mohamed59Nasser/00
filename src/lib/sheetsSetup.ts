@@ -210,13 +210,16 @@ export async function initializeSheet(): Promise<void> {
 
   /* 3. Clear the SEARCH tab and write headers into ALL */
   await sheetsFetch(`/values/${encodeURIComponent(`${SEARCH_TAB}!A1:Z${MAX_ROWS}`)}:clear`, { method: "POST", body: "{}" });
-  await sheetsFetch(`/values/${encodeURIComponent(`${ALL_TAB}!A1:P1`)}?valueInputOption=RAW`, {
+  await sheetsFetch(`/values/${encodeURIComponent(`${ALL_TAB}!A1:Z1`)}?valueInputOption=RAW`, {
     method: "PUT",
     body: JSON.stringify({ values: [[...SHEET_HEADERS]] }),
   });
 
   /* 4. Formatting – ALL tab */
-  const widths = [190, 130, 220, 60, 120, 80, 200, 260, 90, 120, 170, 80, 170, 280, 130, 60];
+  const widths = [
+    190, 130, 220, 60, 120, 80, 200, 260, 90, 120, 170, 80, 170, 280, 130, 60,
+    190, 170, 190, 170, 130, 190, 170, 190, 170, 130,
+  ];
   const allRequests: unknown[] = [
     {
       updateSheetProperties: {
@@ -227,7 +230,7 @@ export async function initializeSheet(): Promise<void> {
     // base body style
     {
       repeatCell: {
-        range: range(a, 1, MAX_ROWS, 0, 16),
+        range: range(a, 1, MAX_ROWS, 0, 26),
         cell: { userEnteredFormat: { verticalAlignment: "MIDDLE", textFormat: { fontSize: 10 } } },
         fields: "userEnteredFormat(verticalAlignment,textFormat.fontSize)",
       },
@@ -235,7 +238,7 @@ export async function initializeSheet(): Promise<void> {
     // header row
     {
       repeatCell: {
-        range: range(a, 0, 1, 0, 16),
+        range: range(a, 0, 1, 0, 26),
         cell: {
           userEnteredFormat: {
             backgroundColor: C.slate800,
@@ -286,13 +289,13 @@ export async function initializeSheet(): Promise<void> {
     {
       addBanding: {
         bandedRange: {
-          range: range(a, 0, MAX_ROWS, 0, 16),
+          range: range(a, 0, MAX_ROWS, 0, 26),
           rowProperties: { headerColor: C.slate800, firstBandColor: C.white, secondBandColor: C.slate50 },
         },
       },
     },
     // filter + hidden ID column
-    { setBasicFilter: { filter: { range: range(a, 0, MAX_ROWS, 0, 16) } } },
+    { setBasicFilter: { filter: { range: range(a, 0, MAX_ROWS, 0, 26) } } },
     {
       updateDimensionProperties: {
         range: { sheetId: a, dimension: "COLUMNS", startIndex: 15, endIndex: 16 },

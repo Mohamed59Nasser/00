@@ -68,8 +68,6 @@ export function GoogleSheetsPanel() {
   const { toast, show } = useToast(4000);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
     try {
       const res = await fetch(appPath("/api/storage"), { cache: "no-store" });
       if (!res.ok) throw new Error("Could not read the storage status.");
@@ -82,7 +80,8 @@ export function GoogleSheetsPanel() {
   }, []);
 
   useEffect(() => {
-    load();
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
 
   async function run(action: "init" | "migrate") {
@@ -123,7 +122,7 @@ export function GoogleSheetsPanel() {
               <p className="text-xs text-slate-500">Every record you add, edit or delete is stored in your Google Sheet.</p>
             </div>
           </div>
-          <button type="button" className="btn-secondary" onClick={load} disabled={loading}>
+          <button type="button" className="btn-secondary" onClick={() => { setLoading(true); setLoadError(null); void load(); }} disabled={loading}>
             <RefreshIcon size={15} className={loading ? "animate-spin" : ""} /> Check connection
           </button>
         </div>

@@ -1,12 +1,16 @@
-import { errorMessage, getStore } from "./store";
-import type { Client } from "./types";
+import "server-only";
 
-/** Loads every client for server-rendered pages (newest first). Never throws. */
-export async function loadClients(): Promise<{ clients: Client[]; error: string | null }> {
+import { errorMessage } from "./store";
+import { listVisibleClients } from "./clients";
+import type { Client } from "./types";
+import type { SessionUser } from "./staff";
+
+/** Loads only records visible to the authenticated user's role and team. */
+export async function loadClients(actor: SessionUser): Promise<{ clients: Client[]; error: string | null }> {
   try {
-    return { clients: await getStore().list(), error: null };
+    return { clients: await listVisibleClients(actor), error: null };
   } catch (error) {
-    console.error("Failed to load clients", error);
+    console.error("Failed to load data", error instanceof Error ? error.message : "Unknown error");
     return { clients: [], error: errorMessage(error, "Failed to load data.") };
   }
 }

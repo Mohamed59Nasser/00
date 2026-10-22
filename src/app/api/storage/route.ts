@@ -1,17 +1,32 @@
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { clients } from "@/db/schema";
-import { getSheetsConfig } from "@/lib/google";
+import { apiError, readJson } from "@/lib/api";
+import { AccessError } from "@/lib/access";
+import { assertSameOrigin, requireApiUser } from "@/lib/auth";
+import { getSheetsConfig, sheetsFetch } from "@/lib/google";
 import { initializeSheet } from "@/lib/sheetsSetup";
 import { errorMessage, getStorageSummary } from "@/lib/store";
 import { postgresStore, rowToClient } from "@/lib/store/postgres";
 import { ALL_TAB, SEARCH_TAB, appendClients, resetSheetsReadyCache, sheetsStore } from "@/lib/store/sheets";
-import { sheetsFetch } from "@/lib/google";
+import { syncUsersToSheet } from "@/lib/usersSheets";
+import type { SessionUser } from "@/lib/staff";
 
 export const dynamic = "force-dynamic";
 
-/** Connection status – also verifies that the Google Sheet can really be reached. */
+async function requireAdmin(): Promise<SessionUser> {
+  const actor = await requireApiUser();
+  if (actor.role !== "admin") throw new AccessError("Only an Admin can manage storage.");
+  return actor;
+}
+
 export async function GET() {
+  try {
+    await requireAdmin();
+  } catch (error) {
+    return apiError(error, "Could not verify access.");
+  }
+
   const summary = getStorageSummary();
   if (!summary.configured) {
     const localRows = await postgresStore.list().catch(() => []);
@@ -44,32 +59,23 @@ export async function GET() {
   }
 }
 
-/** Actions: "init" (create / restyle the tabs) and "migrate" (copy local data into the sheet). */
 export async function POST(request: Request) {
-  if (!getSheetsConfig()) {
-    return Response.json({ error: "Google Sheets is not configured yet." }, { status: 400 });
-  }
-
-  let action = "";
   try {
-    const body = (await request.json()) as { action?: string };
-    action = body.action ?? "";
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+    await requireAdmin();
+    assertSameOrigin(request);
+    if (!getSheetsConfig()) return Response.json({ error: "Google Sheets is not configured yet." }, { status: 400 });
+    const body = (await readJson(request)) as { action?: string };
 
-  try {
-    if (action === "init") {
+    if (body.action === "init") {
       await initializeSheet();
       resetSheetsReadyCache();
-      return Response.json({ ok: true, message: "Sheet initialized: ALL and SEARCH tabs are ready." });
+      await syncUsersToSheet();
+      return Response.json({ ok: true, message: "ALL, SEARCH and USERS tabs are ready." });
     }
 
-    if (action === "migrate") {
+    if (body.action === "migrate") {
       const rows = await db.select().from(clients).orderBy(clients.createdAt);
       if (rows.length === 0) return Response.json({ ok: true, message: "No local records to copy.", copied: 0 });
-
-      // Avoid duplicates: skip anything whose id already exists in the sheet.
       const existing = new Set((await sheetsStore.list()).map((c) => c.id));
       const toCopy = rows.map(rowToClient).filter((c) => !existing.has(c.id));
       const copied = await appendClients(toCopy);
@@ -78,7 +84,6 @@ export async function POST(request: Request) {
 
     return Response.json({ error: "Unknown action." }, { status: 400 });
   } catch (error) {
-    console.error("POST /api/storage failed", error);
-    return Response.json({ error: errorMessage(error, "Operation failed.") }, { status: 500 });
+    return apiError(error, "Storage operation failed.");
   }
 }

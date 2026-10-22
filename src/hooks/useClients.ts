@@ -41,11 +41,11 @@ export function useClients(initialClients: Client[], initialError: string | null
     }
   }, []);
 
-  const create = useCallback(async (input: ClientInput): Promise<Client> => {
+  const create = useCallback(async (input: ClientInput, assignedToId?: string): Promise<Client> => {
     const res = await fetch(appPath("/api/clients"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, ...(assignedToId ? { assignedToId } : {}) }),
     });
     if (!res.ok) throw new Error(await readError(res, "Failed to save record."));
     const data = (await res.json()) as { client: Client };
@@ -66,11 +66,23 @@ export function useClients(initialClients: Client[], initialError: string | null
     return data.client;
   }, []);
 
+  const transfer = useCallback(async (id: string, assignedToId: string): Promise<Client> => {
+    const res = await fetch(appPath(`/api/clients/${encodeURIComponent(id)}/transfer`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedToId }),
+    });
+    if (!res.ok) throw new Error(await readError(res, "Failed to transfer record."));
+    const data = (await res.json()) as { client: Client };
+    setClients((prev) => prev.map((c) => (c.id === id ? data.client : c)));
+    return data.client;
+  }, []);
+
   const remove = useCallback(async (id: string): Promise<void> => {
     const res = await fetch(appPath(`/api/clients/${encodeURIComponent(id)}`), { method: "DELETE" });
     if (!res.ok) throw new Error(await readError(res, "Failed to delete record."));
     setClients((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
-  return { clients, loading, error, refresh, create, update, remove };
+  return { clients, loading, error, refresh, create, update, transfer, remove };
 }

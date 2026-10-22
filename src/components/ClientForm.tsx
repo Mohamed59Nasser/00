@@ -7,11 +7,13 @@ import {
   allowsChildren,
   type Client,
   type ClientInput,
+  type DuplicateInfo,
   type ClientRole,
   type MaritalStatus,
   type PaymentMethod,
   type PropertyType,
 } from "@/lib/types";
+import { appPath } from "@/lib/paths";
 import { AreaPicker } from "./AreaPicker";
 import { AlertIcon, PlusIcon, SpinnerIcon } from "./icons";
 import { ToggleGroup, type ToggleOption } from "./ToggleGroup";
@@ -114,21 +116,56 @@ interface ClientFormProps {
   onCancel?: () => void;
   /** Clears the form after a successful submit (used by the quick-add panel). */
   resetAfterSubmit?: boolean;
+  enableDuplicateCheck?: boolean;
 }
 
-export function ClientForm({ initial, onSubmit, submitLabel = "Add to Sheet", onCancel, resetAfterSubmit }: ClientFormProps) {
+export function ClientForm({ initial, onSubmit, submitLabel = "Add to Sheet", onCancel, resetAfterSubmit, enableDuplicateCheck = false }: ClientFormProps) {
   const [values, setValues] = useState<FormValues>(initial ? fromClient(initial) : EMPTY);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setValues(initial ? fromClient(initial) : EMPTY);
-    setError(null);
-  }, [initial]);
+    if (!enableDuplicateCheck) return;
+    const phone = values.phone.trim();
+    const email = values.email.trim();
+    if (phone.replace(/\D/g, "").length < 5 && !email) return;
 
-  const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setCheckingDuplicate(true);
+      try {
+        const res = await fetch(appPath("/api/clients/duplicate-check"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, email, excludeId: initial?.id }),
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { duplicate: DuplicateInfo | null };
+        setDuplicate(data.duplicate);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      } finally {
+        if (!controller.signal.aborted) setCheckingDuplicate(false);
+      }
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [enableDuplicateCheck, values.phone, values.email, initial?.id]);
+
+  const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
+    if (key === "phone" || key === "email") {
+      setDuplicate(null);
+      setCheckingDuplicate(false);
+    }
     setValues((prev) => ({ ...prev, [key]: value }));
+  };
 
   const kidsEnabled = allowsChildren(values.maritalStatus);
 
@@ -158,12 +195,14 @@ export function ClientForm({ initial, onSubmit, submitLabel = "Add to Sheet", on
       if (raw.trim() && num(raw) === null) return setError(`${label} must be a number.`);
     }
     if (values.propertyTypes.length === 0) return setError("Choose Residential, Investment, or both.");
+    if (duplicate) return setError("This client already exists. Ask the responsible user or leader to review the existing record.");
 
     setSubmitting(true);
     try {
       await onSubmit(toInput(values));
       if (resetAfterSubmit) {
         setValues((prev) => ({ ...EMPTY, role: prev.role, propertyTypes: prev.propertyTypes }));
+        setDuplicate(null);
         nameRef.current?.focus();
       }
     } catch (err) {
@@ -264,6 +303,17 @@ export function ClientForm({ initial, onSubmit, submitLabel = "Add to Sheet", on
           <textarea id="f-notes" rows={2} className="field-input resize-y" placeholder="Anything else worth remembering about this client…" value={values.notes} onChange={(e) => set("notes", e.target.value)} />
         </div>
       </div>
+
+      {enableDuplicateCheck && (checkingDuplicate || duplicate) && (
+        <div className={`rounded-lg px-3 py-2 text-sm ${duplicate ? "bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-200" : "bg-slate-50 text-slate-500"}`}>
+          {checkingDuplicate && !duplicate ? "Checking for an existing client…" : duplicate ? (
+            <>
+              <span className="font-semibold">Possible duplicate ({duplicate.matchedOn}).</span> Assigned to {duplicate.assignedToName}
+              {duplicate.leaderName ? ` · Leader: ${duplicate.leaderName}` : ""} · {duplicate.phone}{duplicate.email ? ` · ${duplicate.email}` : ""}
+            </>
+          ) : null}
+        </div>
+      )}
 
       <div className="flex flex-col-reverse items-stretch justify-between gap-3 sm:flex-row sm:items-center">
         <div className="min-h-[1.25rem] text-sm">

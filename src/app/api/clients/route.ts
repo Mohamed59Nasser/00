@@ -1,36 +1,30 @@
-import { errorMessage, getStore } from "@/lib/store";
+import { apiError, readJson } from "@/lib/api";
+import { assertSameOrigin, requireApiUser } from "@/lib/auth";
+import { createClientForActor, listVisibleClients } from "@/lib/clients";
 import { validateClientInput } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const clients = await getStore().list();
-    return Response.json({ clients });
+    const actor = await requireApiUser();
+    return Response.json({ clients: await listVisibleClients(actor) });
   } catch (error) {
-    console.error("GET /api/clients failed", error);
-    return Response.json({ error: errorMessage(error, "Failed to load clients.") }, { status: 500 });
+    return apiError(error, "Failed to load clients.");
   }
 }
 
 export async function POST(request: Request) {
-  let body: unknown;
   try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  const result = validateClientInput(body);
-  if (!result.ok) {
-    return Response.json({ error: result.error }, { status: 400 });
-  }
-
-  try {
-    const client = await getStore().create(result.data);
+    const actor = await requireApiUser();
+    assertSameOrigin(request);
+    const body = await readJson(request);
+    const result = validateClientInput(body);
+    if (!result.ok) return Response.json({ error: result.error }, { status: 400 });
+    const assignedToId = body && typeof body === "object" ? (body as Record<string, unknown>).assignedToId : undefined;
+    const client = await createClientForActor(actor, result.data, assignedToId);
     return Response.json({ client }, { status: 201 });
   } catch (error) {
-    console.error("POST /api/clients failed", error);
-    return Response.json({ error: errorMessage(error, "Failed to save client.") }, { status: 500 });
+    return apiError(error, "Failed to save client.");
   }
 }

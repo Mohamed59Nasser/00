@@ -36,8 +36,20 @@ export function allowsChildren(status: MaritalStatus): boolean {
   return status !== "single";
 }
 
+export interface ClientAuditFields {
+  assignedToId: string | null;
+  assignedToName: string | null;
+  assignedById: string | null;
+  assignedByName: string | null;
+  assignedAt: string | null;
+  createdById: string | null;
+  createdByName: string | null;
+  updatedById: string | null;
+  updatedByName: string | null;
+}
+
 /** Shape returned by the API (dates serialized as ISO strings). */
-export interface Client {
+export interface Client extends ClientAuditFields {
   id: string;
   name: string;
   phone: string;
@@ -57,8 +69,38 @@ export interface Client {
   updatedAt: string;
 }
 
-/** Shape sent from the form to the API. */
-export type ClientInput = Omit<Client, "id" | "createdAt" | "updatedAt">;
+/** Only fields a browser is allowed to edit. Ownership and audit fields stay server-controlled. */
+export interface ClientInput {
+  name: string;
+  phone: string;
+  email: string | null;
+  age: number | null;
+  maritalStatus: MaritalStatus;
+  childrenCount: number;
+  childrenNote: string | null;
+  areas: string[];
+  sizeSqm: number | null;
+  price: number | null;
+  propertyTypes: PropertyType[];
+  role: ClientRole;
+  paymentMethods: PaymentMethod[];
+  notes: string | null;
+}
+
+export interface ClientMutationMeta {
+  actorId: string;
+  actorName: string;
+  assignedToId?: string | null;
+  assignedToName?: string | null;
+}
+
+export interface DuplicateInfo {
+  matchedOn: "phone" | "email" | "both";
+  assignedToName: string;
+  leaderName: string | null;
+  phone: string;
+  email: string | null;
+}
 
 export function formatPrice(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";

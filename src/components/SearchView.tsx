@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useClients } from "@/hooks/useClients";
 import { useToast } from "@/hooks/useToast";
 import { MARITAL_LABELS, MARITAL_STATUSES, type Client, type ClientRole, type MaritalStatus, type PropertyType } from "@/lib/types";
+import type { PublicUser, SessionUser } from "@/lib/staff";
 import { ClientsTable } from "./ClientsTable";
 import { RecordDialogs } from "./RecordDialogs";
 import { FilterIcon, HomeIcon, RefreshIcon, SearchIcon, TagIcon, TrendIcon, XIcon } from "./icons";
@@ -80,12 +81,20 @@ function Section({
   onEdit,
   onDelete,
   filtered,
+  canDelete,
+  canTransfer,
+  assignableUsers,
+  onTransfer,
 }: {
   type: PropertyType;
   clients: Client[];
   onEdit: (c: Client) => void;
   onDelete: (c: Client) => void;
   filtered: boolean;
+  canDelete: boolean;
+  canTransfer: boolean;
+  assignableUsers: PublicUser[];
+  onTransfer: (id: string, assignedToId: string) => Promise<void>;
 }) {
   const residential = type === "residential";
   return (
@@ -102,6 +111,10 @@ function Section({
         variant="compact"
         onEdit={onEdit}
         onDelete={onDelete}
+        canDelete={canDelete}
+        canTransfer={canTransfer}
+        assignableUsers={assignableUsers}
+        onTransfer={onTransfer}
         maxHeightClass="max-h-[26rem]"
         emptyTitle={filtered ? "No matching records" : "No records in this section"}
         emptyHint={filtered ? "Adjust the filters above." : "Add records from the ALL DATA sheet."}
@@ -138,9 +151,21 @@ function Half({ role, total, shown, children }: { role: ClientRole; total: numbe
 
 /* ---------------- Main view ---------------- */
 
-export function SearchView({ initialClients, initialError }: { initialClients: Client[]; initialError: string | null }) {
-  const { clients, loading, error, refresh, update, remove } = useClients(initialClients, initialError);
+export function SearchView({
+  initialClients,
+  initialError,
+  currentUser,
+  assignableUsers,
+}: {
+  initialClients: Client[];
+  initialError: string | null;
+  currentUser: SessionUser;
+  assignableUsers: PublicUser[];
+}) {
+  const { clients, loading, error, refresh, update, transfer, remove } = useClients(initialClients, initialError);
   const { toast, show } = useToast();
+  const canDelete = currentUser.role === "admin";
+  const canTransfer = currentUser.role !== "agent";
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [editing, setEditing] = useState<Client | null>(null);
   const [deleting, setDeleting] = useState<Client | null>(null);
@@ -172,6 +197,11 @@ export function SearchView({ initialClients, initialError }: { initialClients: C
     }),
     [clients],
   );
+
+  async function handleTransfer(id: string, assignedToId: string) {
+    await transfer(id, assignedToId);
+    show("success", "Client transferred and audit fields updated");
+  }
 
   return (
     <div className="space-y-5">
@@ -254,12 +284,12 @@ export function SearchView({ initialClients, initialError }: { initialClients: C
       {/* BUYER | SELLER */}
       <div className="grid grid-cols-1 gap-5 2xl:grid-cols-2">
         <Half role="buyer" total={totals.buyers} shown={groups.buyerRes.length + groups.buyerInv.length}>
-          <Section type="residential" clients={groups.buyerRes} onEdit={setEditing} onDelete={setDeleting} filtered={isFiltered} />
-          <Section type="investment" clients={groups.buyerInv} onEdit={setEditing} onDelete={setDeleting} filtered={isFiltered} />
+          <Section type="residential" clients={groups.buyerRes} onEdit={setEditing} onDelete={setDeleting} filtered={isFiltered} canDelete={canDelete} canTransfer={canTransfer} assignableUsers={assignableUsers} onTransfer={handleTransfer} />
+          <Section type="investment" clients={groups.buyerInv} onEdit={setEditing} onDelete={setDeleting} filtered={isFiltered} canDelete={canDelete} canTransfer={canTransfer} assignableUsers={assignableUsers} onTransfer={handleTransfer} />
         </Half>
         <Half role="seller" total={totals.sellers} shown={groups.sellerRes.length + groups.sellerInv.length}>
-          <Section type="residential" clients={groups.sellerRes} onEdit={setEditing} onDelete={setDeleting} filtered={isFiltered} />
-          <Section type="investment" clients={groups.sellerInv} onEdit={setEditing} onDelete={setDeleting} filtered={isFiltered} />
+          <Section type="residential" clients={groups.sellerRes} onEdit={setEditing} onDelete={setDeleting} filtered={isFiltered} canDelete={canDelete} canTransfer={canTransfer} assignableUsers={assignableUsers} onTransfer={handleTransfer} />
+          <Section type="investment" clients={groups.sellerInv} onEdit={setEditing} onDelete={setDeleting} filtered={isFiltered} canDelete={canDelete} canTransfer={canTransfer} assignableUsers={assignableUsers} onTransfer={handleTransfer} />
         </Half>
       </div>
 

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useClients } from "@/hooks/useClients";
 import { useToast } from "@/hooks/useToast";
 import type { Client, ClientRole, PropertyType } from "@/lib/types";
+import type { PublicUser, SessionUser } from "@/lib/staff";
 import { appPath } from "@/lib/paths";
 import { ClientForm } from "./ClientForm";
 import { ClientsTable } from "./ClientsTable";
@@ -11,9 +12,22 @@ import { RecordDialogs } from "./RecordDialogs";
 import { DownloadIcon, HomeIcon, PlusIcon, RefreshIcon, SearchIcon, TagIcon, TrendIcon, UsersIcon, XIcon } from "./icons";
 import { StatCard, Toast } from "./ui";
 
-export function AllDataView({ initialClients, initialError }: { initialClients: Client[]; initialError: string | null }) {
-  const { clients, loading, error, refresh, create, update, remove } = useClients(initialClients, initialError);
+export function AllDataView({
+  initialClients,
+  initialError,
+  currentUser,
+  assignableUsers,
+}: {
+  initialClients: Client[];
+  initialError: string | null;
+  currentUser: SessionUser;
+  assignableUsers: PublicUser[];
+}) {
+  const { clients, loading, error, refresh, create, update, transfer, remove } = useClients(initialClients, initialError);
   const { toast, show } = useToast();
+  const canDelete = currentUser.role === "admin";
+  const canTransfer = currentUser.role !== "agent";
+  const [assignedToId, setAssignedToId] = useState(currentUser.id);
 
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | ClientRole>("all");
@@ -69,12 +83,23 @@ export function AllDataView({ initialClients, initialError }: { initialClients: 
             </div>
           </div>
         </div>
-        <div className="px-5 py-4">
+        <div className="space-y-4 px-5 py-4">
+          {canTransfer ? (
+            <div className="max-w-md">
+              <label className="field-label" htmlFor="quick-assign">Assign new record to</label>
+              <select id="quick-assign" className="field-select" value={assignedToId} onChange={(event) => setAssignedToId(event.target.value)}>
+                {assignableUsers.map((user) => <option key={user.id} value={user.id}>{user.displayName} · {user.role.replace("_", " ")}</option>)}
+              </select>
+            </div>
+          ) : (
+            <p className="text-xs font-medium text-slate-500">New records are assigned to you automatically. Duplicate ownership is checked before saving.</p>
+          )}
           <ClientForm
             resetAfterSubmit
+            enableDuplicateCheck
             submitLabel="Add to Sheet"
             onSubmit={async (input) => {
-              await create(input);
+              await create(input, canTransfer ? assignedToId : undefined);
               show("success", `${input.name} added to the sheet`);
             }}
           />
@@ -143,6 +168,13 @@ export function AllDataView({ initialClients, initialError }: { initialClients: 
           variant="full"
           onEdit={setEditing}
           onDelete={setDeleting}
+          canDelete={canDelete}
+          canTransfer={canTransfer}
+          assignableUsers={assignableUsers}
+          onTransfer={async (id, userId) => {
+            await transfer(id, userId);
+            show("success", "Client transferred and audit fields updated");
+          }}
           emptyTitle={hasFilters ? "No records match your filters" : "No records yet"}
           emptyHint={hasFilters ? "Try a different search or clear the filters." : "Add your first client using the form above."}
         />

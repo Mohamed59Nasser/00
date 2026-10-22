@@ -1,70 +1,53 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { ReactNode } from "react";
-import { SheetTabs } from "@/components/SheetTabs";
-import { BuildingIcon, DownloadIcon } from "@/components/icons";
-import { appPath } from "@/lib/paths";
-import { getStorageKind } from "@/lib/store";
 import "./globals.css";
-
-// The header shows where the data lives, which depends on runtime env variables.
-export const dynamic = "force-dynamic";
+import { BuildingIcon, SearchIcon, UsersIcon } from "@/components/icons";
+import { LogoutButton } from "@/components/LogoutButton";
+import { getCurrentUser } from "@/lib/auth";
+import { appPath } from "@/lib/paths";
+import { STAFF_ROLE_LABELS, canManageUsers } from "@/lib/staff";
 
 export const metadata: Metadata = {
-  title: "Broker Data Sheet — Real Estate Clients",
-  description: "Professional real estate broker sheet: all client data, with Buyer/Seller and Residential/Investment search.",
+  title: "Broker Data Sheet",
+  description: "One organized workspace for all your real-estate client records.",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
-  const storageKind = getStorageKind();
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const currentUser = await getCurrentUser();
+
   return (
-    <html lang="en">
-      <body className="bg-slate-100 text-slate-900 antialiased">
-        <header className="bg-slate-900 text-white">
-          <div className="mx-auto flex max-w-[1700px] items-center justify-between gap-4 px-4 pt-4 pb-3 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">
-                <BuildingIcon size={24} />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold leading-tight tracking-tight">Broker Data Sheet</h1>
-                <p className="text-xs text-slate-400">Real estate clients · Buyers &amp; Sellers · Residential &amp; Investment</p>
-              </div>
+    <html lang="en" dir="ltr">
+      <body className="min-h-screen antialiased">
+        <header className="sticky top-0 z-40 border-b border-slate-700/60 bg-slate-900 text-white shadow-lg shadow-slate-900/10">
+          <div className="container-wide flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+            <div className="flex flex-wrap items-center gap-5">
+              <Link href={appPath("/")} className="flex items-center gap-2.5">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-500 text-white shadow-sm">
+                  <BuildingIcon size={19} />
+                </span>
+                <span className="text-[15px] font-bold tracking-tight">Broker Data Sheet</span>
+              </Link>
+              {currentUser && !currentUser.mustChangePassword && (
+                <nav className="flex items-center gap-1" aria-label="Main navigation">
+                  <Link href={appPath("/")} className="rounded-md px-3 py-1.5 text-[13px] font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white">All Data</Link>
+                  <Link href={appPath("/search")} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"><SearchIcon size={14} /> Search</Link>
+                  {canManageUsers(currentUser.role) && <Link href={appPath("/users")} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"><UsersIcon size={14} /> Staff</Link>}
+                  {currentUser.role === "admin" && <Link href={appPath("/sheets")} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-semibold text-emerald-300 transition hover:bg-white/10 hover:text-white">Google Sheets</Link>}
+                </nav>
+              )}
             </div>
             <div className="flex items-center gap-2">
-              <Link
-                href="/sheets"
-                className={`hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset sm:inline-flex ${
-                  storageKind === "sheets"
-                    ? "bg-emerald-500/15 text-emerald-200 ring-emerald-400/40"
-                    : "bg-amber-500/15 text-amber-200 ring-amber-400/40"
-                }`}
-                title="Where your data is stored"
-              >
-                <span className={`h-2 w-2 rounded-full ${storageKind === "sheets" ? "bg-emerald-400" : "bg-amber-400"}`} />
-                Database: {storageKind === "sheets" ? "Google Sheets" : "Local (PostgreSQL)"}
-              </Link>
-              <a
-                href={appPath("/api/export")}
-                className="inline-flex items-center gap-2 rounded-md border border-emerald-400/40 bg-emerald-500/15 px-3.5 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500 hover:text-white"
-                title="Download the whole sheet as an Excel workbook (ALL + SEARCH sheets)"
-              >
-                <DownloadIcon size={16} />
-                <span className="hidden sm:inline">Export to Excel</span>
-                <span className="sm:hidden">Excel</span>
-              </a>
+              {currentUser ? (
+                <>
+                  <span className="text-right text-xs leading-tight text-slate-300"><span className="block font-semibold text-white">{currentUser.displayName}</span>{STAFF_ROLE_LABELS[currentUser.role]}</span>
+                  <Link href={appPath("/change-password")} className="text-xs font-semibold text-slate-300 hover:text-white">Password</Link>
+                  <LogoutButton />
+                </>
+              ) : <span className="text-xs font-medium text-slate-400">Secure staff access</span>}
             </div>
           </div>
-          <div className="mx-auto max-w-[1700px]">
-            <SheetTabs />
-          </div>
         </header>
-
-        <main className="mx-auto max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
-
-        <footer className="mx-auto max-w-[1700px] px-4 pb-8 text-center text-xs text-slate-400 sm:px-6 lg:px-8">
-          Broker Data Sheet · Data is stored securely in your database · Export anytime to Excel
-        </footer>
+        <main className="container-wide py-5">{children}</main>
       </body>
     </html>
   );

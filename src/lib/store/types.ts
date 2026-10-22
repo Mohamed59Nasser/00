@@ -1,4 +1,4 @@
-import type { Client, ClientInput } from "../types";
+import type { Client, ClientInput, ClientMutationMeta } from "../types";
 
 export type StoreKind = "postgres" | "sheets";
 
@@ -6,7 +6,7 @@ export type StoreKind = "postgres" | "sheets";
 export interface Store {
   kind: StoreKind;
   list(): Promise<Client[]>;
-  create(input: ClientInput): Promise<Client>;
-  update(id: string, input: ClientInput): Promise<Client | null>;
+  create(input: ClientInput, meta: ClientMutationMeta): Promise<Client>;
+  update(id: string, input: ClientInput, meta: ClientMutationMeta): Promise<Client | null>;
   remove(id: string): Promise<boolean>;
 }

@@ -10,20 +10,17 @@ import {
   CLIENT_ROLE_LABELS,
   type Client,
   type ClientInput,
+  type ClientMutationMeta,
   type MaritalStatus,
   type PaymentMethod,
   type PropertyType,
 } from "../types";
 import type { Store } from "./types";
 
-/* ------------------------------------------------------------------ */
-/*  Layout of the ALL tab                                              */
-/* ------------------------------------------------------------------ */
-
 export const ALL_TAB = "ALL";
 export const SEARCH_TAB = "SEARCH";
 
-/** Column order of the ALL tab. The last two columns are managed by the app. */
+/** A:Z — original client fields followed by ownership and audit metadata. */
 export const SHEET_HEADERS = [
   "Name",
   "Phone",
@@ -41,20 +38,43 @@ export const SHEET_HEADERS = [
   "Notes",
   "Added",
   "ID",
+  "Assigned To ID",
+  "Assigned To Name",
+  "Assigned By ID",
+  "Assigned By Name",
+  "Assigned At",
+  "Created By ID",
+  "Created By Name",
+  "Updated By ID",
+  "Updated By Name",
+  "Updated At",
 ] as const;
 
-export const LAST_COLUMN_LETTER = "P"; // 16 columns: A..P
-const COL = { ADDED: 14, ID: 15 } as const;
-
-/* ------------------------------------------------------------------ */
-/*  Row <-> Client mapping                                             */
-/* ------------------------------------------------------------------ */
+export const LAST_COLUMN_LETTER = "Z";
+const COL = {
+  ADDED: 14,
+  ID: 15,
+  ASSIGNED_TO_ID: 16,
+  ASSIGNED_TO_NAME: 17,
+  ASSIGNED_BY_ID: 18,
+  ASSIGNED_BY_NAME: 19,
+  ASSIGNED_AT: 20,
+  CREATED_BY_ID: 21,
+  CREATED_BY_NAME: 22,
+  UPDATED_BY_ID: 23,
+  UPDATED_BY_NAME: 24,
+  UPDATED_AT: 25,
+} as const;
 
 const AREA_LOOKUP = new Map(AREAS.map((a) => [a.toLowerCase(), a]));
 
 function str(value: unknown): string {
   if (value === null || value === undefined) return "";
   return String(value).trim();
+}
+
+function nullable(value: unknown): string | null {
+  return str(value) || null;
 }
 
 function numOrNull(value: unknown): number | null {
@@ -75,9 +95,10 @@ function toSheetDate(iso: string): string {
   return iso.slice(0, 16).replace("T", " ");
 }
 
-function fromSheetDate(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value) ? `${value.replace(" ", "T")}:00Z` : value);
+function fromSheetDate(value: unknown): string | null {
+  const raw = str(value);
+  if (!raw) return null;
+  const d = new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(raw) ? `${raw.replace(" ", "T")}:00Z` : raw);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
@@ -110,7 +131,7 @@ function parseAreas(value: unknown): string[] {
 }
 
 interface ParsedRow {
-  rowNumber: number; // 1-based row number in the sheet
+  rowNumber: number;
   client: Client;
   needsId: boolean;
   needsAdded: boolean;
@@ -119,10 +140,11 @@ interface ParsedRow {
 function parseRow(row: unknown[], rowNumber: number): ParsedRow | null {
   const name = str(row[0]);
   const phone = str(row[1]);
-  if (!name && !phone) return null; // blank row
+  if (!name && !phone) return null;
 
   const id = str(row[COL.ID]);
-  const addedIso = fromSheetDate(str(row[COL.ADDED]));
+  const addedIso = fromSheetDate(row[COL.ADDED]);
+  const createdAt = addedIso ?? new Date().toISOString();
   const maritalStatus = parseMarital(row[4]);
   const children = numOrNull(row[5]);
 
@@ -130,20 +152,29 @@ function parseRow(row: unknown[], rowNumber: number): ParsedRow | null {
     id: id || crypto.randomUUID(),
     name: name || "(no name)",
     phone,
-    email: str(row[2]) || null,
+    email: nullable(row[2]),
     age: numOrNull(row[3]),
     maritalStatus,
     childrenCount: maritalStatus === "single" ? 0 : Math.max(0, Math.round(children ?? 0)),
-    childrenNote: str(row[6]) || null,
+    childrenNote: nullable(row[6]),
     areas: parseAreas(row[7]),
     sizeSqm: numOrNull(row[8]),
     price: numOrNull(row[9]),
     propertyTypes: parseTypes(row[10]),
     role: str(row[11]).toLowerCase().startsWith("sell") ? "seller" : "buyer",
     paymentMethods: parsePayments(row[12]),
-    notes: str(row[13]) || null,
-    createdAt: addedIso ?? new Date().toISOString(),
-    updatedAt: addedIso ?? new Date().toISOString(),
+    notes: nullable(row[13]),
+    assignedToId: nullable(row[COL.ASSIGNED_TO_ID]),
+    assignedToName: nullable(row[COL.ASSIGNED_TO_NAME]),
+    assignedById: nullable(row[COL.ASSIGNED_BY_ID]),
+    assignedByName: nullable(row[COL.ASSIGNED_BY_NAME]),
+    assignedAt: fromSheetDate(row[COL.ASSIGNED_AT]),
+    createdById: nullable(row[COL.CREATED_BY_ID]),
+    createdByName: nullable(row[COL.CREATED_BY_NAME]),
+    updatedById: nullable(row[COL.UPDATED_BY_ID]),
+    updatedByName: nullable(row[COL.UPDATED_BY_NAME]),
+    createdAt,
+    updatedAt: fromSheetDate(row[COL.UPDATED_AT]) ?? createdAt,
   };
 
   return { rowNumber, client, needsId: !id, needsAdded: !addedIso };
@@ -167,12 +198,18 @@ function clientToRow(c: Client): (string | number)[] {
     c.notes ?? "",
     toSheetDate(c.createdAt),
     c.id,
+    c.assignedToId ?? "",
+    c.assignedToName ?? "",
+    c.assignedById ?? "",
+    c.assignedByName ?? "",
+    c.assignedAt ? toSheetDate(c.assignedAt) : "",
+    c.createdById ?? "",
+    c.createdByName ?? "",
+    c.updatedById ?? "",
+    c.updatedByName ?? "",
+    toSheetDate(c.updatedAt),
   ];
 }
-
-/* ------------------------------------------------------------------ */
-/*  Sheets API helpers                                                 */
-/* ------------------------------------------------------------------ */
 
 interface SheetMeta {
   sheets?: { properties: { sheetId: number; title: string } }[];
@@ -187,12 +224,17 @@ async function getSheetId(title: string): Promise<number | null> {
 
 let readyPromise: Promise<void> | null = null;
 
-/** Makes sure the ALL / SEARCH tabs exist (initialises the spreadsheet on first use). */
 async function ensureReady(): Promise<void> {
   if (!readyPromise) {
     readyPromise = (async () => {
       const allId = await getSheetId(ALL_TAB);
-      if (allId === null) {
+      const searchId = await getSheetId(SEARCH_TAB);
+      let needsSetup = allId === null || searchId === null;
+      if (allId !== null && !needsSetup) {
+        const header = await sheetsFetch<{ values?: string[][] }>(`/values/${enc(`${ALL_TAB}!A1:Z1`)}`);
+        needsSetup = !header.values?.[0] || SHEET_HEADERS.some((value, index) => header.values?.[0]?.[index] !== value);
+      }
+      if (needsSetup) {
         const { initializeSheet } = await import("../sheetsSetup");
         await initializeSheet();
       }
@@ -204,7 +246,7 @@ async function ensureReady(): Promise<void> {
   return readyPromise;
 }
 
-export function resetSheetsReadyCache() {
+export function resetSheetsReadyCache(): void {
   readyPromise = null;
 }
 
@@ -220,7 +262,6 @@ async function readRows(): Promise<ParsedRow[]> {
     if (p) parsed.push(p);
   });
 
-  // Rows typed directly in Google Sheets have no ID / Added value yet – fill them in.
   const fixes = parsed.filter((p) => p.needsId || p.needsAdded);
   if (fixes.length) {
     await sheetsFetch(`/values:batchUpdate`, {
@@ -237,9 +278,20 @@ async function readRows(): Promise<ParsedRow[]> {
   return parsed;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Store implementation                                               */
-/* ------------------------------------------------------------------ */
+function createAudit(meta: ClientMutationMeta, now: string) {
+  const assignedToId = meta.assignedToId ?? null;
+  return {
+    assignedToId,
+    assignedToName: assignedToId ? meta.assignedToName ?? null : null,
+    assignedById: meta.actorId,
+    assignedByName: meta.actorName,
+    assignedAt: assignedToId ? now : null,
+    createdById: meta.actorId,
+    createdByName: meta.actorName,
+    updatedById: meta.actorId,
+    updatedByName: meta.actorName,
+  };
+}
 
 export const sheetsStore: Store = {
   kind: "sheets",
@@ -251,10 +303,10 @@ export const sheetsStore: Store = {
       .map((p) => p.client);
   },
 
-  async create(input: ClientInput) {
+  async create(input: ClientInput, meta: ClientMutationMeta) {
     await ensureReady();
     const now = new Date().toISOString();
-    const client: Client = { ...input, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    const client: Client = { ...input, ...createAudit(meta, now), id: crypto.randomUUID(), createdAt: now, updatedAt: now };
     await sheetsFetch(
       `/values/${enc(`${ALL_TAB}!A:${LAST_COLUMN_LETTER}`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
       { method: "POST", body: JSON.stringify({ values: [clientToRow(client)] }) },
@@ -262,15 +314,32 @@ export const sheetsStore: Store = {
     return client;
   },
 
-  async update(id: string, input: ClientInput) {
+  async update(id: string, input: ClientInput, meta: ClientMutationMeta) {
     const rows = await readRows();
     const existing = rows.find((p) => p.client.id === id);
     if (!existing) return null;
+    const previous = existing.client;
+    const assignedToId = meta.assignedToId === undefined ? previous.assignedToId : meta.assignedToId;
+    const assignmentChanged = assignedToId !== previous.assignedToId;
+    const now = new Date().toISOString();
     const client: Client = {
       ...input,
       id,
-      createdAt: existing.client.createdAt,
-      updatedAt: new Date().toISOString(),
+      assignedToId,
+      assignedToName: assignedToId
+        ? assignmentChanged
+          ? meta.assignedToName ?? null
+          : previous.assignedToName
+        : null,
+      assignedById: assignmentChanged ? meta.actorId : previous.assignedById,
+      assignedByName: assignmentChanged ? meta.actorName : previous.assignedByName,
+      assignedAt: assignmentChanged ? now : previous.assignedAt,
+      createdById: previous.createdById ?? meta.actorId,
+      createdByName: previous.createdByName ?? meta.actorName,
+      updatedById: meta.actorId,
+      updatedByName: meta.actorName,
+      createdAt: previous.createdAt,
+      updatedAt: now,
     };
     await sheetsFetch(
       `/values/${enc(`${ALL_TAB}!A${existing.rowNumber}:${LAST_COLUMN_LETTER}${existing.rowNumber}`)}?valueInputOption=RAW`,
@@ -306,7 +375,6 @@ export const sheetsStore: Store = {
   },
 };
 
-/** Appends many clients at once (used to copy local PostgreSQL data into the sheet). */
 export async function appendClients(clients: Client[]): Promise<number> {
   if (clients.length === 0) return 0;
   await ensureReady();
