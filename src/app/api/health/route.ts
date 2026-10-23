@@ -11,8 +11,15 @@ export async function GET(request: Request) {
     const debugToken = process.env.HEALTH_DEBUG_TOKEN;
     const providedToken = new URL(request.url).searchParams.get("debug");
     if (debugToken && providedToken === debugToken) {
-      const message = error instanceof Error ? error.message : "Unknown database error";
-      return Response.json({ ok: false, error: message }, { status: 500 });
+      const messages: string[] = [];
+      let current: unknown = error;
+      for (let depth = 0; depth < 5 && current; depth += 1) {
+        messages.push(current instanceof Error ? `${current.name}: ${current.message}` : String(current));
+        current = typeof current === "object" && current !== null && "cause" in current
+          ? (current as { cause?: unknown }).cause
+          : undefined;
+      }
+      return Response.json({ ok: false, error: messages.join(" | ") }, { status: 500 });
     }
     return Response.json({ ok: false }, { status: 500 });
   }
